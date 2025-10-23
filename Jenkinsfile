@@ -2,93 +2,70 @@ pipeline {
     agent any
 
     environment {
-        VENV_DIR = 'venv'
+        VENV_DIR = "${WORKSPACE}/venv"
+        PATH = "${VENV_DIR}/bin:${env.PATH}"
     }
 
     stages {
-
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                echo '📦 Checking out code from GitHub'
-                git branch: 'main', url: 'https://github.com/Srihari5454/Automated-CI-Pipeline.git'
+                checkout scm
+                echo "📦 Checked out code from GitHub"
             }
         }
 
         stage('Setup Virtual Environment & Install Dependencies') {
             steps {
-                echo '🐍 Setting up Python virtual environment'
                 sh '''
-                    python3 -m venv ${VENV_DIR}
-                    . ${VENV_DIR}/bin/activate
+                    python3 -m venv venv
+                    . venv/bin/activate
                     pip install --upgrade pip
                     pip install -r requirements.txt
                 '''
+                echo "🐍 Virtual environment ready and dependencies installed"
             }
         }
 
         stage('Static Code Analysis') {
             steps {
-                echo '🔍 Running Flake8 linting'
                 sh '''
-                    . ${VENV_DIR}/bin/activate
-                    # Ensure src exists, otherwise skip to avoid failure
-                    if [ -d "src" ]; then
-                        flake8 src/
-                    else
-                        echo "⚠️  src directory not found, skipping linting"
-                    fi
+                    . venv/bin/activate
+                    flake8 src/
                 '''
+                echo "🔍 Linting completed"
             }
         }
 
         stage('Run Unit Tests') {
             steps {
-                echo '🧪 Running Pytest tests'
                 sh '''
-                    . ${VENV_DIR}/bin/activate
-                    pytest --junitxml=results.xml || true
+                    . venv/bin/activate
+                    pytest tests/ --maxfail=1 --disable-warnings -q
                 '''
-            }
-
-            post {
-                always {
-                    echo '📊 Publishing test results'
-                    junit 'results.xml'
-                }
+                echo "🧪 Unit tests executed"
             }
         }
 
         stage('Build & Package') {
-            when {
-                expression { fileExists('src/app.py') }
-            }
             steps {
-                echo '📦 Building Flask app package'
-                sh '''
-                    mkdir -p build
-                    cp -r src ${VENV_DIR} requirements.txt build/
-                    echo "Build completed"
-                '''
+                echo "📦 Build & Package stage (optional for Python)"
             }
         }
 
         stage('Archive Artifacts') {
-            when {
-                expression { fileExists('build') }
-            }
             steps {
-                echo '🗂️ Archiving build artifacts'
-                archiveArtifacts artifacts: 'build/**/*', fingerprint: true
+                archiveArtifacts artifacts: '**/*.py', allowEmptyArchive: true
+                echo "📂 Artifacts archived"
             }
         }
     }
 
     post {
         success {
-            echo '✅ Build succeeded!'
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo '❌ Build failed! Check logs for details.'
+            echo "❌ Pipeline failed! Check logs for details."
         }
     }
 }
